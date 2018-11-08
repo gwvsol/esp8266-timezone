@@ -17,10 +17,11 @@ except:
     import errno
     
     
-class TZONE(object):
+class ZONE(object):
     
-    def __init__(self, zone=0):
+    def __init__(self, zone=0, win=True):
         self.zone = zone
+        self.win = win
         # time zones is supported
         self.TIME_ZONE = {-11: -11, -10: -10, -9: -9, -8: -8, -7: -7, -6: -6, -5: -5, \
         -4: -4, -3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, \
@@ -46,7 +47,7 @@ class TZONE(object):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(1)
         res = s.sendto(NTP_QUERY, addr)
-
+            
         try:
             msg = s.recv(48)
         except OSError as exc:
@@ -57,8 +58,8 @@ class TZONE(object):
         s.close()
         val = struct.unpack("!I", msg[40:44])[0]
         return val - self.NTP_DELTA
-
-
+            
+            
     def sunday(self, year, month):
         for d in range(1,32):
             a = (14 - month) // 12
@@ -67,8 +68,8 @@ class TZONE(object):
             if (((d + y + y // 4 - y // 100 + y // 400 + (31 * m) // 12)) % 7) == 0:
                 if d + 7 > 31: 
                     return d
-    
-    
+            
+            
     def adj_tzone(self, utc):
         if utc[1] > self.MONTH['sum']:
             if utc[1] <= self.MONTH['win'] and utc[2] < self.sunday(utc[0], self.MONTH['win']):
@@ -80,3 +81,14 @@ class TZONE(object):
         else:
             print('TIME ZONE Winter:', self.TIME_ZONE[self.zone] - 1)
             return self.TIME_ZONE[self.zone] - 1
+            
+            
+    def setzone(self):
+        utc = time.localtime(self.getntp())
+        z = self.adj_tzone(utc) if self.win else 0
+        nt = utc[0:3] + (0,) + (utc[3]+z,) + utc[4:6] + (0,)
+        print('Update time for Time Zone: ', z)
+        machine.RTC().datetime(nt)
+        print('Local Time: ', str(time.localtime()))
+            
+            
