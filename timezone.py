@@ -1,23 +1,11 @@
-import machine
-try:
-    import utime as time
-except:
-    import time
-try:
-    import usocket as socket
-except:
-    import socket
-try:
-    import ustruct as struct
-except:
-    import struct
-try:
-    import uerrno as errno
-except:
-    import errno
+from time import localtime
+from socket import socket, getaddrinfo, AF_INET, SOCK_DGRAM
+from struct import unpack
+from errno import ETIMEDOUT
+from machine import RTC
     
     
-class ZONE(object):
+class TZONE(object):
     
     def __init__(self, zone=0, win=True):
         self.zone = zone
@@ -31,35 +19,33 @@ class ZONE(object):
         
         self.NTP_DELTA = 3155673600
         self.host = "pool.ntp.org"
-    
-    
+
     def getntp(self):
         print('Get UTC time from NTP server...')
         NTP_QUERY = bytearray(48)
         NTP_QUERY[0] = 0x1b
 
         try:
-            addr = socket.getaddrinfo(self.host, 123)[0][-1]
+            addr = getaddrinfo(self.host, 123)[0][-1]
         except OSError: # as exc:
             #if exc.args[0] == -2:
                 print('Connect NTP Server: Error resolving pool NTP')
                 return 0
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s = socket(AF_INET, SOCK_DGRAM)
         s.settimeout(1)
         res = s.sendto(NTP_QUERY, addr)
-            
+
         try:
             msg = s.recv(48)
         except OSError as exc:
-            if exc.args[0] == errno.ETIMEDOUT:
+            if exc.args[0] == ETIMEDOUT:
                 print('Connect NTP Server: Request Timeout')
                 s.close()
                 return 0
         s.close()
-        val = struct.unpack("!I", msg[40:44])[0]
+        val = unpack("!I", msg[40:44])[0]
         return val - self.NTP_DELTA
-            
-            
+
     def sunday(self, year, month):
         for d in range(1,32):
             a = (14 - month) // 12
@@ -68,8 +54,7 @@ class ZONE(object):
             if (((d + y + y // 4 - y // 100 + y // 400 + (31 * m) // 12)) % 7) == 0:
                 if d + 7 > 31: 
                     return d
-            
-            
+
     def adj_tzone(self, utc):
         if utc[1] > self.MONTH['sum']:
             if utc[1] <= self.MONTH['win'] and utc[2] < self.sunday(utc[0], self.MONTH['win']):
@@ -81,14 +66,12 @@ class ZONE(object):
         else:
             print('TIME ZONE Winter:', self.TIME_ZONE[self.zone] - 1)
             return self.TIME_ZONE[self.zone] - 1
-            
-            
+
     def setzone(self):
-        utc = time.localtime(self.getntp())
-        z = self.adj_tzone(utc) if self.win else 0
-        nt = utc[0:3] + (0,) + (utc[3]+z,) + utc[4:6] + (0,)
+        ntp = self.getntp()
+        z = self.adj_tzone(localtime(ntp)) if self.win else 0 
+        utc = localtime(ntp + (3600 * z))
         print('Update time for Time Zone: ', z)
-        machine.RTC().datetime(nt)
-        print('Local Time: ', str(time.localtime()))
-            
-            
+        RTC().datetime(utc)
+        print('Local Time: ', str(localtime()))
+
